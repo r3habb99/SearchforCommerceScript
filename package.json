@@ -1,0 +1,43 @@
+{
+  "name": "vertex-ai-commerce-search",
+  "version": "1.0.0",
+  "description": "Vertex AI Search for Commerce with Dense, Sparse, and Hybrid Search support",
+  "main": "api/commerce_search_api.js",
+  "scripts": {
+    "convert": "node data-conversion/unified/universal_converter.js",
+    "convert:scalable": "node --max-old-space-size=4096 --expose-gc data-conversion/unified/universal_converter.js",
+    "build": "npm run convert"
+  },
+  "keywords": [
+    "vertex-ai",
+    "search",
+    "commerce",
+    "embeddings",
+    "hybrid-search",
+    "dense-search",
+    "sparse-search",
+    "google-cloud",
+    "retail-api"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "natural": "^6.5.0",
+    "stream-json": "^1.8.0",
+    "p-queue": "^7.4.1",
+    "winston": "^3.11.0",
+    "cli-progress": "^3.12.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/r3habb99/vertex-ai-commerce-search.git"
+  },
+  "bugs": {
+    "url": "https://github.com/r3habb99/vertex-ai-commerce-search/issues"
+  },
+  "homepage": "https://github.com/r3habb99/vertex-ai-commerce-search#readme"
+}
