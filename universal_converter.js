@@ -18,6 +18,14 @@ const { Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
+// Import constants from the constants folder
+const {
+    CONFIG,
+    TEXT_PATTERNS,
+    SYNONYMS,
+    PATTERN_BOOSTS
+} = require('./constants');
+
 // Note: Install these packages for production use:
 // npm install stream-json p-queue winston cli-progress
 // For now, we'll use fallbacks if packages are not available
@@ -52,89 +60,8 @@ try {
     cliProgress = null;
 }
 
-// Enhanced Configuration - Dynamic processing of all JSON files in Data folder
-const CONFIG = {
-    // Dynamic input - automatically discovers all JSON files in Data folder
-    INPUT_DIRECTORY: './Data',
-
-    // Output directory - dynamically generated based on input file names
-    OUTPUT_DIRECTORY: './output',
-
-    // File patterns to include/exclude
-    FILE_PATTERNS: {
-        INCLUDE: /\.json$/i,  // Include all .json files
-        EXCLUDE: /\.(log|tmp|backup)$/i  // Exclude log, tmp, backup files
-    },
-
-    // Advanced Embedding configuration for comprehensive search
-    EMBEDDINGS: {
-        DENSE_DIM: 384,                    // Standard dimension for semantic search
-        MAX_SPARSE_FEATURES: 100,          // Increased for better keyword coverage
-        MIN_KEYWORD_FREQUENCY: 1,
-        STOPWORDS_ENABLED: true,
-        ENABLE_DENSE: true,
-        ENABLE_SPARSE: true,
-        ENABLE_HYBRID: true,
-
-        // Advanced search optimization
-        DENSE_WEIGHT: 0.6,                 // Weight for semantic similarity
-        SPARSE_WEIGHT: 0.4,                // Weight for keyword matching
-        KEYWORD_BOOST: {                   // Boost important keywords
-            'title': 3.0,
-            'brand': 2.5,
-            'category': 2.0,
-            'description': 1.5,
-            'features': 1.2
-        },
-
-        // Multi-language support
-        LANGUAGE_DETECTION: true,
-        STEMMING_ENABLED: true,
-        SYNONYM_EXPANSION: true
-    },
-
-    // Processing limits
-    LIMITS: {
-        MAX_DESCRIPTION_LENGTH: 2000,
-        MAX_CATEGORIES: 10,
-        MAX_TITLE_LENGTH: 500
-    },
-
-    // Scalability and Performance Configuration for Millions of Files
-    PROCESSING: {
-        BATCH_SIZE: 1000,                  // Items per batch to control memory usage
-        CONCURRENCY_LIMIT: 5,              // Parallel file processing limit
-        ENABLE_STREAMING: false,            // Use streaming for large JSON files
-        SHARD_OUTPUT: true,                // Split large output files
-        MAX_LINES_PER_SHARD: 1000000,     // 1M lines per output file
-        LOG_PROGRESS_EVERY: 1000,          // Log progress every N items
-        MEMORY_THRESHOLD_MB: 512,          // Memory usage threshold for GC
-        RETRY_ATTEMPTS: 3,                 // Retry failed operations
-        RETRY_DELAY_MS: 1000,              // Delay between retries
-        ENABLE_COMPRESSION: false,         // Compress output files (optional)
-        TEMP_DIR: './temp',            // Temporary directory for processing
-        CHECKPOINT_ENABLED: true,          // Enable checkpointing for resume
-        CHECKPOINT_INTERVAL: 10000         // Save checkpoint every N items
-    },
-
-    // Enhanced Logging Configuration
-    LOGGING: {
-        LEVEL: 'info',                     // debug, info, warn, error
-        ENABLE_FILE_LOGGING: true,         // Log to files
-        LOG_DIR: './logs',             // Log directory
-        MAX_LOG_SIZE: '10MB',              // Max log file size
-        MAX_LOG_FILES: 5,                  // Max number of log files
-        ENABLE_PROGRESS_BAR: true,         // Show progress bar in console
-        LOG_ERRORS_SEPARATELY: true       // Separate error log file
-    },
-
-    // Commerce format settings
-    COMMERCE: {
-        CURRENCY_CODE: 'USD'
-        // Note: PROJECT_ID, CATALOG_ID, and BRANCH_ID are typically configured
-        // at deployment time via environment variables or external configuration
-    }
-};
+// Note: All configuration constants are now imported from ./constants/
+// This includes CONFIG, EMBEDDINGS, PROCESSING, LOGGING, etc.
 
 /**
  * Enhanced Logger for scalable processing
@@ -293,22 +220,55 @@ class StreamingJSONParser {
 
         return new Promise((resolve, reject) => {
             const products = [];
-            const stream = fs.createReadStream(filePath)
-                .pipe(StreamArray.withParser());
+            let isVertexFormat = false;
 
-            stream.on('data', ({ value }) => {
-                products.push(value);
-            });
+            // First, check if this is a vertex catalog format
+            try {
+                const sampleData = fs.readFileSync(filePath, 'utf8').substring(0, 1000);
+                if (sampleData.includes('"products":[')) {
+                    isVertexFormat = true;
+                }
+            } catch (error) {
+                // Continue with normal parsing
+            }
 
-            stream.on('end', () => {
-                this.logger.info(`Streaming parse complete: ${products.length} items`);
-                resolve(products);
-            });
+            if (isVertexFormat) {
+                // Handle vertex catalog format with nested products
+                const stream = fs.createReadStream(filePath)
+                    .pipe(StreamArray.withParser('products.*'));
 
-            stream.on('error', (error) => {
-                this.logger.error(`Streaming parse error: ${error.message}`);
-                reject(error);
-            });
+                stream.on('data', ({ value }) => {
+                    products.push(value);
+                });
+
+                stream.on('end', () => {
+                    this.logger.info(`Streaming parse complete: ${products.length} items`);
+                    resolve(products);
+                });
+
+                stream.on('error', (error) => {
+                    this.logger.error(`Streaming parse error: ${error.message}`);
+                    reject(error);
+                });
+            } else {
+                // Handle direct array format
+                const stream = fs.createReadStream(filePath)
+                    .pipe(StreamArray.withParser());
+
+                stream.on('data', ({ value }) => {
+                    products.push(value);
+                });
+
+                stream.on('end', () => {
+                    this.logger.info(`Streaming parse complete: ${products.length} items`);
+                    resolve(products);
+                });
+
+                stream.on('error', (error) => {
+                    this.logger.error(`Streaming parse error: ${error.message}`);
+                    reject(error);
+                });
+            }
         });
     }
 
@@ -347,30 +307,18 @@ class TextProcessor {
         this.tokenizer = new natural.WordTokenizer();
         this.stopwords = new Set(natural.stopwords);
 
-        // Enhanced search patterns for better matching
+        // Use patterns and synonyms from constants
         this.searchPatterns = {
-            // Product-specific patterns
-            sizes: /\b(small|medium|large|xl|xxl|\d+\s*(oz|ml|g|kg|lb|lbs|mg|mcg))\b/gi,
-            colors: /\b(red|blue|green|yellow|black|white|brown|pink|purple|orange|gray|grey)\b/gi,
-            brands: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g,
-            numbers: /\b\d+(?:\.\d+)?\b/g,
-
-            // Commerce-specific terms
-            commerceTerms: /\b(organic|natural|premium|professional|clinical|pharmaceutical|supplement|vitamin|protein|creatine|amino|bcaa)\b/gi,
-
-            // Action words for search intent
-            actionWords: /\b(buy|purchase|order|get|find|search|looking|need|want|best|top|review)\b/gi
+            sizes: TEXT_PATTERNS.SIZES,
+            colors: TEXT_PATTERNS.COLORS,
+            brands: TEXT_PATTERNS.BRANDS,
+            numbers: TEXT_PATTERNS.NUMBERS,
+            commerceTerms: TEXT_PATTERNS.COMMERCE_TERMS,
+            actionWords: TEXT_PATTERNS.ACTION_WORDS
         };
 
-        // Synonym expansion for better search coverage
-        this.synonyms = {
-            'supplement': ['vitamin', 'nutrient', 'pill', 'capsule', 'tablet'],
-            'protein': ['whey', 'casein', 'isolate', 'concentrate'],
-            'muscle': ['strength', 'power', 'building', 'growth'],
-            'weight': ['mass', 'bulk', 'size', 'gain', 'loss'],
-            'energy': ['boost', 'power', 'stamina', 'endurance'],
-            'health': ['wellness', 'fitness', 'nutrition', 'healthy']
-        };
+        // Use synonyms from constants
+        this.synonyms = SYNONYMS;
     }
 
     /**
@@ -471,17 +419,12 @@ class TextProcessor {
     getPatternBoost(token) {
         let boost = 1.0;
 
-        // Boost commerce-specific terms
-        if (this.searchPatterns.commerceTerms.test(token)) boost *= 1.5;
-
-        // Boost size/quantity indicators
-        if (this.searchPatterns.sizes.test(token)) boost *= 1.3;
-
-        // Boost color terms
-        if (this.searchPatterns.colors.test(token)) boost *= 1.2;
-
-        // Boost numbers that might be important
-        if (this.searchPatterns.numbers.test(token)) boost *= 1.1;
+        // Use boost values from constants
+        if (this.searchPatterns.commerceTerms.test(token)) boost *= PATTERN_BOOSTS.COMMERCE_TERMS;
+        if (this.searchPatterns.sizes.test(token)) boost *= PATTERN_BOOSTS.SIZES;
+        if (this.searchPatterns.colors.test(token)) boost *= PATTERN_BOOSTS.COLORS;
+        if (this.searchPatterns.numbers.test(token)) boost *= PATTERN_BOOSTS.NUMBERS;
+        if (this.searchPatterns.brands.test(token)) boost *= PATTERN_BOOSTS.BRANDS;
 
         return boost;
     }
@@ -1432,9 +1375,15 @@ class UniversalConverter {
         let currentShardPath = outputFilePath;
         let currentShardStream = null;
 
-        // Initialize first shard
-        if (CONFIG.PROCESSING.SHARD_OUTPUT) {
+        // Determine if sharding is needed based on product count
+        const shouldShard = CONFIG.PROCESSING.SHARD_OUTPUT && products.length > maxLinesPerShard;
+
+        // Initialize first output file
+        if (shouldShard) {
             currentShardPath = this.getShardPath(outputFilePath, currentShard);
+            this.logger.info(`Large dataset detected (${products.length} products). Using sharded output.`);
+        } else {
+            currentShardPath = outputFilePath;
         }
         currentShardStream = fs.createWriteStream(currentShardPath, { flags: 'w' });
 
@@ -1452,8 +1401,8 @@ class UniversalConverter {
                 // Write results to current shard
                 for (const product of batchResults) {
                     if (product) {
-                        // Check if we need to start a new shard
-                        if (CONFIG.PROCESSING.SHARD_OUTPUT && currentShardLines >= maxLinesPerShard) {
+                        // Check if we need to start a new shard (only if sharding is enabled)
+                        if (shouldShard && currentShardLines >= maxLinesPerShard) {
                             currentShardStream.end();
                             currentShard++;
                             currentShardLines = 0;
@@ -1845,11 +1794,9 @@ class UniversalConverter {
 
             this.logger.stopProgress();
 
-            // Update combined stats
+            // Update combined stats with accurate embedding counting
             this.stats.combined.total = allConvertedProducts.length;
-            this.stats.combined.withEmbeddings = allConvertedProducts.filter(
-                p => p.attributes?.search_optimization?.vertex_ai_ready
-            ).length;
+            this.stats.combined.withEmbeddings = this.countProductsWithEmbeddings(allConvertedProducts);
 
             // Write combined output with sharding if needed
             if (allConvertedProducts.length > 0) {
@@ -1870,7 +1817,7 @@ class UniversalConverter {
             }
 
             // Generate comprehensive final report
-            this.generateDynamicFinalReport();
+            this.generateDynamicFinalReport(this.stats.performance.startTime);
 
         } catch (error) {
             this.logger.error('Dynamic conversion failed', { error: error.message });
@@ -1895,12 +1842,15 @@ class UniversalConverter {
 
             const processingTime = Date.now() - fileStartTime;
 
-            // Track stats for this file
+            // Track stats for this file with accurate embedding detection
+            const embeddingCount = this.countProductsWithEmbeddings(convertedProducts);
+            const actualOutputPath = this.getActualOutputPath(outputPath);
+
             this.stats.processedFiles[fileName] = {
                 inputPath: filePath,
-                outputPath: outputPath,
+                outputPath: actualOutputPath,
                 totalProducts: convertedProducts.length,
-                withEmbeddings: convertedProducts.filter(p => p.attributes?.search_optimization?.vertex_ai_ready).length,
+                withEmbeddings: embeddingCount,
                 processed: true,
                 processingTimeMs: processingTime,
                 averageItemsPerSecond: Math.round(convertedProducts.length / (processingTime / 1000))
@@ -1987,12 +1937,16 @@ class UniversalConverter {
      */
     generateDynamicFinalReport(startTime) {
         const endTime = Date.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(2);
+        const duration = startTime ? ((endTime - startTime) / 1000).toFixed(2) : null;
 
-        // Calculate success rates
+        // Calculate success rates and update combined stats with accurate embedding counting
         const processedFiles = Object.keys(this.stats.processedFiles);
         const successfulFiles = processedFiles.filter(file => this.stats.processedFiles[file].processed);
         const failedFiles = processedFiles.filter(file => !this.stats.processedFiles[file].processed);
+
+        // Update combined stats with accurate data
+        this.stats.combined.total = successfulFiles.reduce((sum, f) => sum + this.stats.processedFiles[f].totalProducts, 0);
+        this.stats.combined.withEmbeddings = successfulFiles.reduce((sum, f) => sum + this.stats.processedFiles[f].withEmbeddings, 0);
 
         const report = {
             timestamp: new Date().toISOString(),
@@ -2004,7 +1958,8 @@ class UniversalConverter {
                 total_files_discovered: this.stats.combined.totalFiles,
                 successfully_processed: successfulFiles.length,
                 failed_to_process: failedFiles.length,
-                success_rate: ((successfulFiles.length / processedFiles.length) * 100).toFixed(2) + '%'
+                success_rate: processedFiles.length > 0 ?
+                    ((successfulFiles.length / processedFiles.length) * 100).toFixed(2) + '%' : '0.00%'
             },
 
             // Product statistics
@@ -2012,7 +1967,7 @@ class UniversalConverter {
                 total_products: this.stats.combined.total,
                 products_with_embeddings: this.stats.combined.withEmbeddings,
                 embedding_success_rate: this.stats.combined.total > 0 ?
-                    ((this.stats.combined.withEmbeddings / this.stats.combined.total) * 100).toFixed(2) + '%' : '0%'
+                    ((this.stats.combined.withEmbeddings / this.stats.combined.total) * 100).toFixed(2) + '%' : '0.00%'
             },
 
             // Advanced embedding features
@@ -2036,6 +1991,12 @@ class UniversalConverter {
             combined_output_file: 'all_data_files_commerce_ready.jsonl'
         };
 
+        // Validate report accuracy before writing
+        const validation = this.validateReportAccuracy(report);
+
+        // Add validation results to report
+        report.validation = validation;
+
         // Write report
         const reportPath = path.resolve(__dirname, CONFIG.OUTPUT_DIRECTORY, 'dynamic_conversion_report.json');
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
@@ -2056,9 +2017,141 @@ class UniversalConverter {
             });
         }
 
+        // Display validation results
+        if (!validation.isValid) {
+            console.log('\n⚠️  REPORT VALIDATION ISSUES:');
+            validation.errors.forEach(error => console.log(`   ❌ ${error}`));
+        }
+
+        if (validation.warnings.length > 0) {
+            console.log('\n⚠️  VALIDATION WARNINGS:');
+            validation.warnings.forEach(warning => console.log(`   ⚠️  ${warning}`));
+        }
+
+        if (validation.isValid && validation.warnings.length === 0) {
+            console.log('\n✅ REPORT VALIDATION: All checks passed!');
+        }
+
         console.log(`\n📄 Detailed Report: ${reportPath}`);
         console.log('\n🚀 All files ready for Vertex AI Commerce Search import!');
         console.log('🎯 Optimized for comprehensive search coverage with multi-level embeddings');
+    }
+
+    /**
+     * Count products with actual embeddings (accurate detection)
+     */
+    countProductsWithEmbeddings(products) {
+        if (!products || !Array.isArray(products)) return 0;
+
+        return products.filter(product => {
+            if (!product || !product.attributes) return false;
+
+            // Check for any type of embedding
+            const hasEmbeddings = !!(
+                product.attributes.dense_embedding?.numbers?.length > 0 ||
+                product.attributes.title_embedding?.numbers?.length > 0 ||
+                product.attributes.category_embedding?.numbers?.length > 0 ||
+                product.attributes.sparse_embedding?.text?.length > 0 ||
+                product.attributes.search_optimization?.vertex_ai_ready === true
+            );
+
+            return hasEmbeddings;
+        }).length;
+    }
+
+    /**
+     * Get actual output path (handles sharding)
+     */
+    getActualOutputPath(originalPath) {
+        if (!originalPath) return null;
+
+        // Check if sharded files exist first
+        const dir = path.dirname(originalPath);
+        const basename = path.basename(originalPath, '.jsonl');
+        const shardedPath = path.join(dir, `${basename}_shard_000.jsonl`);
+
+        try {
+            if (fs.existsSync(shardedPath)) {
+                return shardedPath;
+            }
+            // Check if the original file exists
+            if (fs.existsSync(originalPath)) {
+                return originalPath;
+            }
+            // Return the path that should exist based on our logic
+            return originalPath;
+        } catch (error) {
+            this.logger.warn(`Could not check for output file: ${error.message}`);
+            return originalPath;
+        }
+    }
+
+    /**
+     * Validate report accuracy
+     */
+    validateReportAccuracy(report) {
+        const validation = {
+            isValid: true,
+            warnings: [],
+            errors: []
+        };
+
+        // Validate file statistics
+        if (report.file_statistics) {
+            const fileStats = report.file_statistics;
+            if (fileStats.total_files_discovered === 0) {
+                validation.errors.push('No files discovered - check input directory');
+            }
+
+            if (fileStats.successfully_processed === 0 && fileStats.total_files_discovered > 0) {
+                validation.errors.push('No files successfully processed despite files being discovered');
+            }
+        }
+
+        // Validate product statistics
+        if (report.product_statistics) {
+            const productStats = report.product_statistics;
+            if (productStats.total_products === 0) {
+                validation.warnings.push('No products found in processed files');
+            }
+
+            // Check embedding success rate logic
+            const expectedEmbeddingRate = productStats.total_products > 0 ?
+                (productStats.products_with_embeddings / productStats.total_products * 100).toFixed(2) + '%' : '0%';
+
+            if (productStats.embedding_success_rate !== expectedEmbeddingRate) {
+                validation.errors.push(`Embedding success rate calculation mismatch: reported ${productStats.embedding_success_rate}, expected ${expectedEmbeddingRate}`);
+            }
+        }
+
+        // Validate processed files
+        if (report.processed_files) {
+            Object.entries(report.processed_files).forEach(([fileName, fileData]) => {
+                if (fileData.processed && fileData.outputPath) {
+                    // Check if output file actually exists
+                    try {
+                        if (!fs.existsSync(fileData.outputPath)) {
+                            validation.warnings.push(`Output file not found: ${fileData.outputPath}`);
+                        }
+                    } catch (error) {
+                        validation.warnings.push(`Could not verify output file: ${fileData.outputPath}`);
+                    }
+                }
+
+                // Validate embedding count vs total products
+                if (fileData.withEmbeddings > fileData.totalProducts) {
+                    validation.errors.push(`File ${fileName}: embedding count (${fileData.withEmbeddings}) exceeds total products (${fileData.totalProducts})`);
+                }
+            });
+        }
+
+        // Validate duration
+        if (report.duration_seconds === null || report.duration_seconds === undefined) {
+            validation.warnings.push('Duration not recorded - timing information missing');
+        }
+
+        validation.isValid = validation.errors.length === 0;
+        return validation;
     }
 
     /**

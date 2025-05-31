@@ -6,6 +6,14 @@
   "scripts": {
     "convert": "node universal_converter.js",
     "convert:scalable": "node --max-old-space-size=4096 --expose-gc universal_converter.js",
+    "convert:options": "node scripts/conversion/convert_with_options.js",
+    "optimize": "node scripts/optimization/optimize_output.js",
+    "optimize:minimal": "echo '1' | node scripts/optimization/optimize_output.js",
+    "optimize:balanced": "echo '2' | node scripts/optimization/optimize_output.js",
+    "optimize:compact": "echo '3' | node scripts/optimization/optimize_output.js",
+    "optimize:compressed": "echo '4' | node scripts/optimization/optimize_output.js",
+    "optimize:all": "echo '5' | node scripts/optimization/optimize_output.js",
+    "results": "node scripts/optimization/show_results.js",
     "build": "npm run convert"
   },
   "keywords": [

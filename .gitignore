@@ -1,4 +1,19 @@
-node_modules
-logs
-output/
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+
+# Output files (keep directory structure but ignore contents)
+output/*.jsonl
+output/*.json
+output/*.gz
+
+# Optimized output files (ignore entire directory)
+optimized/
+
+# Temporary files
+temp/
+
+# Data files (user-specific)
 Data/
