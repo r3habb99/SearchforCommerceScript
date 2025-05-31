@@ -130,10 +130,9 @@ const CONFIG = {
 
     // Commerce format settings
     COMMERCE: {
-        CURRENCY_CODE: 'USD',
-        PROJECT_ID: 'ai-vertex-supplements',
-        CATALOG_ID: 'default_catalog',
-        BRANCH_ID: '1'
+        CURRENCY_CODE: 'USD'
+        // Note: PROJECT_ID, CATALOG_ID, and BRANCH_ID are typically configured
+        // at deployment time via environment variables or external configuration
     }
 };
 
