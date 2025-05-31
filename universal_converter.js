@@ -55,10 +55,10 @@ try {
 // Enhanced Configuration - Dynamic processing of all JSON files in Data folder
 const CONFIG = {
     // Dynamic input - automatically discovers all JSON files in Data folder
-    INPUT_DIRECTORY: '../../Data',
+    INPUT_DIRECTORY: './Data',
 
     // Output directory - dynamically generated based on input file names
-    OUTPUT_DIRECTORY: '../../output',
+    OUTPUT_DIRECTORY: './output',
 
     // File patterns to include/exclude
     FILE_PATTERNS: {
@@ -104,7 +104,7 @@ const CONFIG = {
     PROCESSING: {
         BATCH_SIZE: 1000,                  // Items per batch to control memory usage
         CONCURRENCY_LIMIT: 5,              // Parallel file processing limit
-        ENABLE_STREAMING: true,            // Use streaming for large JSON files
+        ENABLE_STREAMING: false,            // Use streaming for large JSON files
         SHARD_OUTPUT: true,                // Split large output files
         MAX_LINES_PER_SHARD: 1000000,     // 1M lines per output file
         LOG_PROGRESS_EVERY: 1000,          // Log progress every N items
@@ -112,7 +112,7 @@ const CONFIG = {
         RETRY_ATTEMPTS: 3,                 // Retry failed operations
         RETRY_DELAY_MS: 1000,              // Delay between retries
         ENABLE_COMPRESSION: false,         // Compress output files (optional)
-        TEMP_DIR: '../../temp',            // Temporary directory for processing
+        TEMP_DIR: './temp',            // Temporary directory for processing
         CHECKPOINT_ENABLED: true,          // Enable checkpointing for resume
         CHECKPOINT_INTERVAL: 10000         // Save checkpoint every N items
     },
@@ -121,7 +121,7 @@ const CONFIG = {
     LOGGING: {
         LEVEL: 'info',                     // debug, info, warn, error
         ENABLE_FILE_LOGGING: true,         // Log to files
-        LOG_DIR: '../../logs',             // Log directory
+        LOG_DIR: './logs',             // Log directory
         MAX_LOG_SIZE: '10MB',              // Max log file size
         MAX_LOG_FILES: 5,                  // Max number of log files
         ENABLE_PROGRESS_BAR: true,         // Show progress bar in console

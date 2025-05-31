@@ -1,11 +1,11 @@
 {
-  "name": "vertex-ai-commerce-search",
+  "name": "vertex-ai-commerce-search-script-for-text-embeddings",
   "version": "1.0.0",
   "description": "Vertex AI Search for Commerce with Dense, Sparse, and Hybrid Search support",
   "main": "api/commerce_search_api.js",
   "scripts": {
-    "convert": "node data-conversion/unified/universal_converter.js",
-    "convert:scalable": "node --max-old-space-size=4096 --expose-gc data-conversion/unified/universal_converter.js",
+    "convert": "node universal_converter.js",
+    "convert:scalable": "node --max-old-space-size=4096 --expose-gc universal_converter.js",
     "build": "npm run convert"
   },
   "keywords": [
@@ -19,7 +19,7 @@
     "google-cloud",
     "retail-api"
   ],
-  "author": "Your Name",
+  "author": "Rishabh Prajapati",
   "license": "MIT",
   "dependencies": {
     "natural": "^6.5.0",
