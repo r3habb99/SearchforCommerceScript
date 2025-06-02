@@ -625,10 +625,10 @@ class EmbeddingGenerator {
 
         if (format === 'vertex' || format === 'generic') {
             // Vertex catalog format (primary focus) and generic format
-            searchableComponents.title = product.title || product.name || '';
+            searchableComponents.title = this.textProcessor.cleanText(product.title || product.name || '');
             searchableComponents.description = this.textProcessor.cleanText(product.description || '');
-            searchableComponents.categories = (product.categories || []).join(' ');
-            searchableComponents.brands = (product.brands || []).join(' ');
+            searchableComponents.categories = (product.categories || []).map(cat => this.textProcessor.cleanText(cat)).join(' ');
+            searchableComponents.brands = (product.brands || []).map(brand => this.textProcessor.cleanText(brand)).join(' ');
 
             // Extract attributes from vertex format
             if (product.attributes) {
@@ -795,10 +795,10 @@ class EmbeddingGenerator {
         };
 
         // Vertex catalog format (primary focus) and generic format
-        components.title = product.title || product.name || '';
-        components.description = product.description || '';
-        components.categories = (product.categories || []).join(' ');
-        components.brands = (product.brands || []).join(' ');
+        components.title = this.textProcessor.cleanText(product.title || product.name || '');
+        components.description = this.textProcessor.cleanText(product.description || '');
+        components.categories = (product.categories || []).map(cat => this.textProcessor.cleanText(cat)).join(' ');
+        components.brands = (product.brands || []).map(brand => this.textProcessor.cleanText(brand)).join(' ');
 
         if (product.attributes) {
             const attributeTexts = [];
@@ -886,6 +886,7 @@ class EmbeddingGenerator {
 class ProductConverter {
     constructor() {
         this.embeddingGenerator = new EmbeddingGenerator();
+        this.textProcessor = new TextProcessor();
     }
 
 
@@ -896,7 +897,7 @@ class ProductConverter {
     convertVertexProduct(vertexProduct) {
         try {
             const productId = vertexProduct.id || `vertex-product-${Date.now()}`;
-            const title = (vertexProduct.title || 'Untitled Product').substring(0, CONFIG.LIMITS.MAX_TITLE_LENGTH);
+            const title = this.textProcessor.cleanText(vertexProduct.title || 'Untitled Product').substring(0, CONFIG.LIMITS.MAX_TITLE_LENGTH);
 
             // Process categories
             const categories = this.processCategories(vertexProduct.categories || []);
@@ -931,7 +932,7 @@ class ProductConverter {
     }
 
     /**
-     * Process categories - remove promotional and limit count
+     * Process categories - clean HTML, remove promotional and limit count
      */
     processCategories(categories) {
         if (!Array.isArray(categories)) return [];
@@ -939,6 +940,7 @@ class ProductConverter {
         const promotionalKeywords = ['sale', 'new', 'clearance', 'promo', 'deal', 'special', 'limited'];
 
         return categories
+            .map(cat => this.textProcessor.cleanText(cat))
             .filter(cat => {
                 const lowerCat = cat.toLowerCase();
                 return !promotionalKeywords.some(keyword => lowerCat.includes(keyword));
@@ -952,11 +954,8 @@ class ProductConverter {
     processDescription(description) {
         if (!description) return '';
 
-        // Remove HTML tags
-        let cleaned = description.replace(/<[^>]*>/g, ' ');
-
-        // Normalize whitespace
-        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+        // Use comprehensive text cleaning
+        let cleaned = this.textProcessor.cleanText(description);
 
         // Limit length
         return cleaned.substring(0, CONFIG.LIMITS.MAX_DESCRIPTION_LENGTH);
@@ -999,7 +998,38 @@ class ProductConverter {
      * Process Vertex product attributes
      */
     processVertexAttributes(vertexProduct) {
-        return vertexProduct.attributes || {};
+        const attributes = { ...(vertexProduct.attributes || {}) };
+
+        // Extract gender information from audience.genders and create gender_esai
+        if (vertexProduct.audience && vertexProduct.audience.genders) {
+            const genders = Array.isArray(vertexProduct.audience.genders)
+                ? vertexProduct.audience.genders
+                : [vertexProduct.audience.genders];
+
+            // Create gender_esai attribute
+            attributes.gender_esai = {
+                text: genders
+            };
+
+            // Update filter_fields_esai to include gender values if it exists
+            if (attributes.filter_fields && attributes.filter_fields.text) {
+                // Add gender values to filter_fields if not already present
+                const currentFilterFields = attributes.filter_fields.text;
+                const newFilterFields = [...currentFilterFields];
+
+                genders.forEach(gender => {
+                    if (!newFilterFields.includes(gender)) {
+                        newFilterFields.push(gender);
+                    }
+                });
+
+                attributes.filter_fields = {
+                    text: newFilterFields
+                };
+            }
+        }
+
+        return attributes;
     }
 
 
@@ -1016,7 +1046,7 @@ class ProductConverter {
                              genericProduct.sku ||
                              `generic-product-${Date.now()}`;
 
-            const title = (genericProduct.title ||
+            const title = this.textProcessor.cleanText(genericProduct.title ||
                           genericProduct.name ||
                           genericProduct.product_name ||
                           genericProduct.display_name ||
@@ -1140,9 +1170,10 @@ class ProductConverter {
 
         Object.entries(attributeFields).forEach(([sourceField, attrName]) => {
             if (genericProduct[sourceField]) {
+                const values = Array.isArray(genericProduct[sourceField]) ?
+                    genericProduct[sourceField] : [String(genericProduct[sourceField])];
                 attributes[attrName] = {
-                    text: Array.isArray(genericProduct[sourceField]) ?
-                        genericProduct[sourceField] : [String(genericProduct[sourceField])]
+                    text: values.map(val => this.textProcessor.cleanText(String(val)))
                 };
             }
         });
@@ -1151,9 +1182,10 @@ class ProductConverter {
         const systemFields = new Set(['id', 'title', 'name', 'description', 'price', 'categories', 'brand', 'availability']);
         Object.keys(genericProduct).forEach(key => {
             if (!systemFields.has(key) && !attributes[key] && genericProduct[key] !== null && genericProduct[key] !== undefined) {
+                const values = Array.isArray(genericProduct[key]) ?
+                    genericProduct[key].map(String) : [String(genericProduct[key])];
                 attributes[`custom_${key}`] = {
-                    text: Array.isArray(genericProduct[key]) ?
-                        genericProduct[key].map(String) : [String(genericProduct[key])]
+                    text: values.map(val => this.textProcessor.cleanText(val))
                 };
             }
         });
