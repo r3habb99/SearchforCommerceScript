@@ -13,10 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const natural = require('natural');
 
-// Enhanced dependencies for scalability
-const { Transform } = require('stream');
-const { pipeline } = require('stream/promises');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+// Note: Enhanced dependencies for scalability (Transform, pipeline, Worker threads)
+// were removed as they are not currently used in the implementation.
+// These can be re-added when implementing streaming transforms or worker thread processing.
 
 // Import constants from the constants folder
 const {
@@ -1823,7 +1822,13 @@ class UniversalConverter {
             this.logger.error('Dynamic conversion failed', { error: error.message });
             throw error;
         } finally {
+            // Ensure all monitoring and intervals are stopped
             this.memoryMonitor.stopMonitoring();
+
+            // Force cleanup of any remaining intervals or timers
+            if (this.logger && this.logger.progressBar) {
+                this.logger.stopProgress();
+            }
         }
     }
 
@@ -2181,16 +2186,26 @@ if (require.main === module) {
         console.log(`📁 Output: ${outputFile || 'auto-generated'}`);
         console.log(`🎯 Format hint: ${formatHint}`);
 
-        converter.processAnyJSONFile(inputFile, outputFile, formatHint).catch(error => {
-            console.error('❌ Custom file conversion failed:', error);
-            process.exit(1);
-        });
+        converter.processAnyJSONFile(inputFile, outputFile, formatHint)
+            .then(() => {
+                console.log('✅ Custom file conversion completed successfully!');
+                process.exit(0);
+            })
+            .catch(error => {
+                console.error('❌ Custom file conversion failed:', error);
+                process.exit(1);
+            });
     } else {
         // Default mode - process all JSON files from Data directory
         console.log('🔧 Dynamic processing mode - Auto-discovering all JSON files from Data directory');
-        converter.processAllDataFiles().catch(error => {
-            console.error('❌ Dynamic conversion failed:', error);
-            process.exit(1);
-        });
+        converter.processAllDataFiles()
+            .then(() => {
+                console.log('✅ Dynamic conversion completed successfully!');
+                process.exit(0);
+            })
+            .catch(error => {
+                console.error('❌ Dynamic conversion failed:', error);
+                process.exit(1);
+            });
     }
 }

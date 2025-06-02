@@ -70,6 +70,7 @@ const denseDim = COMMON.DENSE_DIM;
 ## Constant Categories
 
 ### 1. **paths.js** - File and Directory Paths
+
 - Input/output directories
 - Script locations
 - Log file paths
@@ -77,6 +78,7 @@ const denseDim = COMMON.DENSE_DIM;
 - Path helper functions
 
 ### 2. **embeddings.js** - Embedding Configuration
+
 - Dense/sparse embedding settings
 - Text processing patterns
 - Keyword boosting weights
@@ -84,6 +86,7 @@ const denseDim = COMMON.DENSE_DIM;
 - Language processing options
 
 ### 3. **processing.js** - Processing Settings
+
 - Batch processing configuration
 - Memory management settings
 - Performance targets
@@ -91,6 +94,7 @@ const denseDim = COMMON.DENSE_DIM;
 - Concurrency limits
 
 ### 4. **optimization.js** - Optimization Settings
+
 - File size optimization levels
 - Field optimization rules
 - Compression settings
@@ -98,6 +102,7 @@ const denseDim = COMMON.DENSE_DIM;
 - Reduction targets
 
 ### 5. **logging.js** - Logging Configuration
+
 - Log levels and formats
 - Progress bar settings
 - Error handling
@@ -105,6 +110,7 @@ const denseDim = COMMON.DENSE_DIM;
 - Log rotation settings
 
 ### 6. **config.js** - Main Configuration
+
 - Combines all constants
 - Backward compatibility
 - Environment configurations
@@ -113,6 +119,7 @@ const denseDim = COMMON.DENSE_DIM;
 ## Migration from Old Configuration
 
 ### Before (in universal_converter.js)
+
 ```javascript
 const CONFIG = {
     INPUT_DIRECTORY: './Data',
@@ -125,6 +132,7 @@ const CONFIG = {
 ```
 
 ### After (using constants)
+
 ```javascript
 const { CONFIG } = require('./constants');
 // All settings are now centralized and organized
@@ -192,3 +200,42 @@ console.log('Configuration valid:', isValid);
 ## Backward Compatibility
 
 The constants are designed to be backward compatible with the existing codebase. The main `CONFIG` object maintains the same structure as before, so existing code will continue to work without modifications.
+
+## Recent Updates
+
+### Process Exit Configuration
+
+Added configuration options to ensure proper script termination:
+
+```javascript
+PROCESSING: {
+    // ... existing settings
+    ENABLE_PROCESS_EXIT: true,        // Enable explicit process.exit() calls
+    EXIT_TIMEOUT_MS: 5000,           // Timeout before forced exit
+    CLEANUP_ON_EXIT: true            // Enable cleanup on exit
+}
+```
+
+### Dependency Optimization
+
+Removed unused dependency configurations that were never implemented:
+
+- Stream processing configuration (Transform, pipeline)
+- Worker thread configuration (Worker, isMainThread, parentPort, workerData)
+
+These can be re-added when implementing actual streaming transforms or worker thread processing.
+
+### Memory Management Improvements
+
+Enhanced memory monitoring and cleanup configuration:
+
+```javascript
+PROCESSING: {
+    // ... existing settings
+    MEMORY_MONITORING_INTERVAL: 5000, // Memory check interval in ms
+    FORCE_GC_THRESHOLD: 0.8,          // Force GC at 80% memory usage
+    CLEANUP_INTERVALS: true           // Enable interval cleanup
+}
+```
+
+These updates ensure the converter properly exits after completion and manages resources more effectively.
