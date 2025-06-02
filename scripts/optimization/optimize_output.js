@@ -13,7 +13,7 @@ const readline = require('readline');
 const { execSync } = require('child_process');
 
 // Import constants
-const { PATHS, OPTIMIZATION, SIZE_ESTIMATES } = require('../../constants');
+const { PATHS } = require('../../constants');
 
 class OutputOptimizer {
     constructor() {
@@ -279,20 +279,25 @@ class OutputOptimizer {
      * Create compressed version using gzip
      */
     compressFile(inputFile) {
-        const inputPath = path.join(this.outputDir, inputFile);
+        const inputPath = path.join(this.inputDir, inputFile);  // Read from input directory
         const outputPath = path.join(this.outputDir, inputFile.replace('.jsonl', '_compressed.jsonl.gz'));
 
         try {
+            if (!fs.existsSync(inputPath)) {
+                console.log(`❌ Input file not found: ${inputPath}`);
+                return null;
+            }
+
+            console.log(`\n🗜️  Compressing: ${inputFile}`);
             execSync(`gzip -c "${inputPath}" > "${outputPath}"`);
-            
+
             const originalStats = fs.statSync(inputPath);
             const compressedStats = fs.statSync(outputPath);
             const compressionRatio = ((originalStats.size - compressedStats.size) / originalStats.size * 100).toFixed(1);
-            
-            console.log(`🗜️  Compressed: ${inputFile}`);
+
             console.log(`💾 Compression ratio: ${compressionRatio}%`);
             console.log(`📁 Output: ${outputPath}`);
-            
+
             return {
                 originalSize: originalStats.size,
                 compressedSize: compressedStats.size,
