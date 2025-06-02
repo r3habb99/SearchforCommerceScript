@@ -340,6 +340,19 @@ class TextProcessor {
     }
 
     /**
+     * Clean and validate text array to remove empty strings and invalid values
+     * This prevents Vertex AI Commerce Search import errors
+     */
+    cleanTextArray(textArray) {
+        if (!Array.isArray(textArray)) return [];
+
+        return textArray
+            .map(text => this.cleanText(text))
+            .filter(text => text && text.length > 0)
+            .filter(text => text !== '' && text.trim() !== '');
+    }
+
+    /**
      * Enhanced keyword extraction with weighted importance and search optimization
      */
     extractKeywords(text, maxFeatures = CONFIG.EMBEDDINGS.MAX_SPARSE_FEATURES, context = 'general') {
@@ -1000,6 +1013,19 @@ class ProductConverter {
     processVertexAttributes(vertexProduct) {
         const attributes = { ...(vertexProduct.attributes || {}) };
 
+        // Clean all text arrays to remove empty strings and prevent import errors
+        Object.keys(attributes).forEach(key => {
+            if (attributes[key] && attributes[key].text && Array.isArray(attributes[key].text)) {
+                const cleanedText = this.textProcessor.cleanTextArray(attributes[key].text);
+                if (cleanedText.length > 0) {
+                    attributes[key].text = cleanedText;
+                } else {
+                    // Remove attribute if all values are empty after cleaning
+                    delete attributes[key];
+                }
+            }
+        });
+
         // Extract gender information from audience.genders and create gender_esai
         if (vertexProduct.audience && vertexProduct.audience.genders) {
             const genders = Array.isArray(vertexProduct.audience.genders)
@@ -1172,9 +1198,12 @@ class ProductConverter {
             if (genericProduct[sourceField]) {
                 const values = Array.isArray(genericProduct[sourceField]) ?
                     genericProduct[sourceField] : [String(genericProduct[sourceField])];
-                attributes[attrName] = {
-                    text: values.map(val => this.textProcessor.cleanText(String(val)))
-                };
+                const cleanedValues = this.textProcessor.cleanTextArray(values.map(String));
+                if (cleanedValues.length > 0) {
+                    attributes[attrName] = {
+                        text: cleanedValues
+                    };
+                }
             }
         });
 
@@ -1184,9 +1213,12 @@ class ProductConverter {
             if (!systemFields.has(key) && !attributes[key] && genericProduct[key] !== null && genericProduct[key] !== undefined) {
                 const values = Array.isArray(genericProduct[key]) ?
                     genericProduct[key].map(String) : [String(genericProduct[key])];
-                attributes[`custom_${key}`] = {
-                    text: values.map(val => this.textProcessor.cleanText(val))
-                };
+                const cleanedValues = this.textProcessor.cleanTextArray(values);
+                if (cleanedValues.length > 0) {
+                    attributes[`custom_${key}`] = {
+                        text: cleanedValues
+                    };
+                }
             }
         });
 
